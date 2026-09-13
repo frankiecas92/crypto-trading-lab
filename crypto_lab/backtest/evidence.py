@@ -13,11 +13,12 @@ from typing import Any, Dict, List, Sequence
 
 
 class EvidenceStatus(str, Enum):
-    """Separate engine validation from trading evidence."""
+    """Separate engine validation from real historical / trading evidence."""
 
     ENGINE_VALIDATION_ONLY = "ENGINE_VALIDATION_ONLY"
+    REAL_HISTORICAL_EVIDENCE = "REAL_HISTORICAL_EVIDENCE"
     TRADING_EVIDENCE_CANDIDATE = "TRADING_EVIDENCE_CANDIDATE"
-    # EDGE_CONFIRMED is reserved; never emitted for synthetic/demo runs.
+    # EDGE_CONFIRMED is reserved; never auto-emitted.
     EDGE_CONFIRMED = "EDGE_CONFIRMED"
 
 
@@ -73,10 +74,19 @@ def is_synthetic_dataset(dataset_id: str | None) -> bool:
     return any(d.startswith(p) or p in d for p in SYNTHETIC_DATASET_PREFIXES)
 
 
-def evidence_status_for_dataset(dataset_id: str | None) -> EvidenceStatus:
-    """Synthetic/demo → ENGINE_VALIDATION_ONLY. Never EDGE_CONFIRMED here."""
+def evidence_status_for_dataset(
+    dataset_id: str | None,
+    *,
+    real_historical: bool = False,
+) -> EvidenceStatus:
+    """Synthetic/demo → ENGINE_VALIDATION_ONLY. Real research → REAL_HISTORICAL_EVIDENCE.
+
+    Never EDGE_CONFIRMED here.
+    """
     if is_synthetic_dataset(dataset_id):
         return EvidenceStatus.ENGINE_VALIDATION_ONLY
+    if real_historical:
+        return EvidenceStatus.REAL_HISTORICAL_EVIDENCE
     return EvidenceStatus.TRADING_EVIDENCE_CANDIDATE
 
 
@@ -144,10 +154,16 @@ def build_evidence_block(
     dataset_id: str | None,
     sample: SampleAdequacy | None = None,
     force_synthetic_conclusions: bool | None = None,
+    real_historical: bool = False,
 ) -> Dict[str, Any]:
     """Report block: evidence status + scientific conclusions (no edge claims)."""
     synthetic = is_synthetic_dataset(dataset_id)
-    status = evidence_status_for_dataset(dataset_id)
+    if synthetic and real_historical:
+        raise ValueError(
+            "fixtures/synthetic datasets cannot be REAL_HISTORICAL_EVIDENCE "
+            f"(dataset_id={dataset_id!r})"
+        )
+    status = evidence_status_for_dataset(dataset_id, real_historical=real_historical)
     assert_not_edge_confirmed_for_synthetic(status, dataset_id)
     use_synth = force_synthetic_conclusions if force_synthetic_conclusions is not None else synthetic
     conclusions = synthetic_scientific_conclusions() if use_synth else synthetic_scientific_conclusions()

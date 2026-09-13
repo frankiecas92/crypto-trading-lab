@@ -1,13 +1,14 @@
-# Crypto Trading Lab — Phase 4B (Research Campaign)
+# Crypto Trading Lab — Phase 4B-REAL (Historical Strategy Evaluation)
 
 **ES / EN** — Laboratorio de investigación: motor de datos públicos + backtest histórico.  
-**Phase 4B**: research campaign / strategy evaluation sobre Phase 4A historical + Phase 3 research + Phase 2 Data Engine + Phase 1 infra.  
+**Phase 4B-REAL**: research campaign on **real** Binance Spot history (BTC/ETH) + Phase 4A/4B protocol + Phase 3 research + Phase 2 Data Engine. Phase 5 **not** justified by current evidence.  
 **No** trading real, **no** órdenes reales, **no** bucle paper en vivo, **no** apalancamiento, **no** API keys.
 
 - Data Engine: [`docs/DATA_ENGINE.md`](docs/DATA_ENGINE.md)
 - Research lab: [`docs/STRATEGY_RESEARCH_LAB.md`](docs/STRATEGY_RESEARCH_LAB.md)
 - Historical datasets: [`docs/HISTORICAL_DATA.md`](docs/HISTORICAL_DATA.md)
 - Research campaign: [`docs/RESEARCH_CAMPAIGN.md`](docs/RESEARCH_CAMPAIGN.md)
+- Real campaign report: [`docs/RESEARCH_CAMPAIGN_REAL.md`](docs/RESEARCH_CAMPAIGN_REAL.md)
 
 ---
 
@@ -21,7 +22,7 @@
 | IS/OOS, walk-forward, robustness, Monte Carlo | Leverage / money / agents |
 | Experiment registry (SQLite + JSON) | Trading API keys |
 | Historical download / validate / snapshot (4A) | EDGE_CONFIRMED / PROFITABLE claims |
-| Research campaign protocol (4B) | Decision Engine / Paper Trader / autonomy |
+| Research campaign protocol (4B / 4B-REAL) | Decision Engine / Paper Trader / autonomy |
 
 ---
 
@@ -50,6 +51,7 @@ crypto-lab experiment demo --bars 180 --seed 7
 crypto-lab historical-data download --timeframe 1h --max-bars 72
 crypto-lab historical-data status
 crypto-lab research-campaign run --fixture --seed 7 --no-persist
+crypto-lab research-campaign run-real --years 2 --max-bars 20000
 ```
 
 ## Tests

@@ -44,6 +44,7 @@ def aggregate_campaign_evidence(
     vs_buy_and_hold: Dict[str, Any] | None = None,
     overfitting_risk: str | None = None,
     force_insufficient: bool = False,
+    real_historical: bool = False,
 ) -> Dict[str, Any]:
     """Build campaign evidence. Default conclusion is negative / insufficient.
 
@@ -177,12 +178,23 @@ def aggregate_campaign_evidence(
     else:
         factors.append(_factor("overfitting_risk", True, of))
 
+    # Fixtures cannot be labeled REAL_HISTORICAL_EVIDENCE
+    if real_historical and is_synthetic_dataset(dataset_id):
+        raise ValueError(
+            "fixtures/synthetic datasets cannot be REAL_HISTORICAL_EVIDENCE "
+            f"(dataset_id={dataset_id!r})"
+        )
+
     # Base evidence block (never EDGE_CONFIRMED)
-    block = build_evidence_block(dataset_id=dataset_id, sample=sample)
+    block = build_evidence_block(
+        dataset_id=dataset_id, sample=sample, real_historical=real_historical
+    )
     block["EDGE_CONFIRMED"] = False
     block["PROFITABLE"] = False
 
-    # Phase 4B: thin/demo windows → almost always insufficient / no evidence
+    # Phase 4B: thin/demo windows → almost always insufficient / no evidence.
+    # Real historical campaigns still default to no-edge unless truly strong
+    # (and still never auto EDGE_CONFIRMED / PROFITABLE).
     insufficient = (
         force_insufficient
         or (sample is not None and sample.status == SampleStatus.INSUFFICIENT_SAMPLE)
@@ -202,9 +214,15 @@ def aggregate_campaign_evidence(
         status = (
             EvidenceStatus.ENGINE_VALIDATION_ONLY.value
             if is_synthetic_dataset(dataset_id)
-            else EvidenceStatus.TRADING_EVIDENCE_CANDIDATE.value
+            else (
+                EvidenceStatus.REAL_HISTORICAL_EVIDENCE.value
+                if real_historical
+                else EvidenceStatus.TRADING_EVIDENCE_CANDIDATE.value
+            )
         )
-    if insufficient and not is_synthetic_dataset(dataset_id):
+    if real_historical and not is_synthetic_dataset(dataset_id):
+        status = EvidenceStatus.REAL_HISTORICAL_EVIDENCE.value
+    elif insufficient and not is_synthetic_dataset(dataset_id):
         # Real history on thin window: candidate at most, still no edge.
         if status == EvidenceStatus.ENGINE_VALIDATION_ONLY.value:
             pass
@@ -217,10 +235,12 @@ def aggregate_campaign_evidence(
     block["factors"] = factors
     block["why"] = reasons
     block["campaign"] = True
+    block["real_historical"] = bool(real_historical)
     block["note"] = (
         "Phase 4B research campaign: multi-factor aggregator. "
-        "Historical evaluation on small/demo windows does not confirm edge. "
-        "Never EDGE_CONFIRMED / PROFITABLE without strict multi-factor evidence."
+        "ENGINE_VALIDATION_ONLY is for fixtures/synthetic; "
+        "REAL_HISTORICAL_EVIDENCE is evaluation on public historical OHLCV — "
+        "still not EDGE_CONFIRMED / PROFITABLE without strict multi-factor evidence."
     )
     assert_not_edge_or_profitable(block)
     if block.get("EVIDENCE_STATUS") == EvidenceStatus.EDGE_CONFIRMED.value:

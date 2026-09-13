@@ -88,7 +88,14 @@ class Settings(BaseSettings):
         default=200, description="Default max bars per historical download (small)"
     )
     historical_hard_max_bars: int = Field(
-        default=2000, description="Refuse downloads requesting more bars than this"
+        default=2000, description="Refuse downloads requesting more bars than this (CLI/casual)"
+    )
+    historical_research_hard_max_bars: int = Field(
+        default=30000,
+        description=(
+            "Elevated hard max for Phase 4B-REAL research downloads only "
+            "(~2–3y of 1h bars). Casual CLI still uses historical_hard_max_bars."
+        ),
     )
     historical_default_timeframe: str = Field(
         default="1h", description="Default historical download timeframe"
@@ -96,6 +103,12 @@ class Settings(BaseSettings):
     historical_data_version: str = Field(
         default="4A.1", description="Dataset content schema version"
     )
+
+    def effective_historical_hard_max(self, *, research: bool = False) -> int:
+        """Hard max for downloads: research path may use elevated cap."""
+        if research:
+            return int(self.historical_research_hard_max_bars)
+        return int(self.historical_hard_max_bars)
 
     @field_validator("mode", mode="before")
     @classmethod

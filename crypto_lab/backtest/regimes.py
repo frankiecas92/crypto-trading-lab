@@ -7,6 +7,7 @@ by choosing a single primary label per bar (vol overrides when extreme).
 
 from __future__ import annotations
 
+import bisect
 from typing import List, Sequence
 
 from crypto_lab.backtest.features import causal_sma
@@ -19,7 +20,11 @@ def label_regimes(
     trend_period: int = 20,
     vol_period: int = 20,
 ) -> List[str]:
-    """Return one label per bar. Uses only causal information at each i."""
+    """Return one label per bar. Uses only causal information at each i.
+
+    Volatility HIGH/LOW thresholds use an *expanding* median of realized vol
+    from bars ≤ i only — never the full-sample median (look-ahead).
+    """
     n = len(bars)
     if n == 0:
         return []
@@ -39,15 +44,18 @@ def label_regimes(
         var = sum((x - mu) ** 2 for x in window) / len(window)
         vol[i] = var ** 0.5
 
-    known_vol = [v for v in vol if v is not None]
-    med_vol = sorted(known_vol)[len(known_vol) // 2] if known_vol else None
-
+    # Expanding (causal) median of known vols at bars ≤ i
+    known_sorted: List[float] = []
     labels: List[str] = []
     for i in range(n):
+        if vol[i] is not None:
+            bisect.insort(known_sorted, float(vol[i]))
+        med_vol = known_sorted[len(known_sorted) // 2] if known_sorted else None
+
         if sma[i] is None or i < 1:
             labels.append("UNKNOWN")
             continue
-        # vol overlay
+        # vol overlay — thresholds from causal median only
         if vol[i] is not None and med_vol is not None and med_vol > 0:
             if vol[i] >= 1.5 * med_vol:  # type: ignore[operator]
                 labels.append("HIGH_VOL")

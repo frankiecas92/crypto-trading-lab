@@ -63,6 +63,20 @@ On small/demo windows the aggregator **forces** insufficient / no-edge conclusio
 
 ---
 
+## Phase 4B-REAL
+
+See [`RESEARCH_CAMPAIGN_REAL.md`](RESEARCH_CAMPAIGN_REAL.md) for the real Binance Spot campaign
+(BTCUSDT+ETHUSDT, ~2y 1h, `REAL_HISTORICAL_EVIDENCE`, Phase 5 **not** justified).
+
+```bash
+crypto-lab research-campaign run-real --years 2 --max-bars 20000
+crypto-lab research-campaign run --real --max-bars 20000 --years 2 --timeframe 1h
+```
+
+Casual CLI hard max remains 2000; research path uses `HISTORICAL_RESEARCH_HARD_MAX_BARS` (default 30000).
+
+---
+
 ## CLI
 
 ```bash

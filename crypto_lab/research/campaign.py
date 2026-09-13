@@ -85,6 +85,9 @@ class CampaignConfig:
     mom_lookback_min: int = 5
     mom_lookback_max: int = 15
     mom_lookback_step: int = 5
+    # Phase 4B-REAL
+    real_historical: bool = False
+    force_insufficient: bool = True  # True for small/demo; False for real when sample adequate
 
 
 def fixture_bars(
@@ -105,6 +108,55 @@ def fixture_bars(
         timeframe=timeframe,
         seed=seed + (0 if symbol.startswith("BTC") else 11),
     )
+
+
+
+def assert_real_historical_eligible(
+    dataset_id: str,
+    meta: Dict[str, Any] | None = None,
+) -> None:
+    """Reject fixtures/synthetic as REAL_HISTORICAL_EVIDENCE."""
+    meta = meta or {}
+    origin = str(meta.get("origin") or "").lower()
+    if is_synthetic_dataset(dataset_id):
+        raise ResearchError(
+            f"dataset_id={dataset_id!r} is fixture/synthetic — "
+            "cannot be REAL_HISTORICAL_EVIDENCE"
+        )
+    if meta.get("synthetic") is True or origin in {
+        "fixture",
+        "fixture_fallback",
+        "synthetic",
+    }:
+        raise ResearchError(
+            f"dataset origin={origin!r} is not real historical evidence "
+            f"(dataset_id={dataset_id!r})"
+        )
+
+
+def detect_oos_contamination(
+    locked_params: Dict[str, Any],
+    current_params: Dict[str, Any] | None,
+    *,
+    test_peeked: bool,
+) -> Dict[str, Any] | None:
+    """Flag OOS contamination when params change after TEST peek."""
+    if not test_peeked or current_params is None:
+        return None
+    import json
+
+    a = json.dumps(locked_params, sort_keys=True, default=str)
+    b = json.dumps(current_params, sort_keys=True, default=str)
+    if a == b:
+        return None
+    return {
+        "type": "OOS_PARAM_CHANGE_VIOLATION",
+        "OOS_CONTAMINATION": True,
+        "message": "Parameters changed after TEST peek / EVALUATE_OOS",
+        "locked_parameters": dict(locked_params),
+        "current_parameters": dict(current_params),
+    }
+
 
 
 def load_bars_from_catalog(
@@ -172,14 +224,19 @@ def maybe_download_small(
     timeframe: str = "1h",
     max_bars: int = 72,
     source: str = "binance",
+    research: bool = False,
 ) -> tuple[List[Bar], str, Dict[str, Any]]:
-    """Download a small public window via Phase 4A (safe limits)."""
+    """Download a public window via Phase 4A.
+
+    Casual path uses historical_hard_max_bars (default 2000).
+    Research path may use historical_research_hard_max_bars (default 30000).
+    """
     from crypto_lab.data.historical.service import HistoricalDataService
 
     settings = get_settings()
-    hard = int(getattr(settings, "historical_hard_max_bars", 2000))
+    hard = settings.effective_historical_hard_max(research=research)
     if max_bars > hard:
-        raise ResearchError(f"max_bars={max_bars} exceeds hard cap {hard}")
+        raise ResearchError(f"max_bars={max_bars} exceeds hard cap {hard} (research={research})")
     svc = HistoricalDataService(session, settings=settings, source=source)
     try:
         payload = svc.download(symbol, timeframe=timeframe, max_bars=max_bars, resume=True)
@@ -193,6 +250,114 @@ def maybe_download_small(
     meta["origin"] = "download"
     meta["download"] = payload.get("download")
     return bars, did, meta
+
+
+def download_real_historical(
+    session,
+    *,
+    symbol: str = "BTCUSDT",
+    timeframe: str = "1h",
+    years: float = 2.0,
+    max_bars: int = 20000,
+    source: str = "binance",
+) -> tuple[List[Bar], str, Dict[str, Any]]:
+    """Download ~years of public Binance Spot OHLCV for Phase 4B-REAL.
+
+    Uses elevated research hard max via settings. Resume + pagination.
+    Does not impute gaps. Returns bars + catalog dataset_id + quality meta.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from crypto_lab.data.historical.service import HistoricalDataService
+
+    settings = get_settings()
+    # Temporarily elevate hard max for this research download without changing
+    # casual CLI defaults permanently — Settings is mutable on the instance.
+    research_hard = int(settings.historical_research_hard_max_bars)
+    casual_hard = int(settings.historical_hard_max_bars)
+    if max_bars > research_hard:
+        raise ResearchError(
+            f"max_bars={max_bars} exceeds research hard max {research_hard}"
+        )
+    # Point HistoricalDownloader hard check at research cap for this call
+    settings.historical_hard_max_bars = research_hard
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=max(1, int(years * 365.25)))
+    # Prefer the *most recent* max_bars when the year span exceeds the bar cap
+    # (downloader truncates from start forward otherwise).
+    if timeframe.strip().lower() == "1h":
+        span_hours = int((end - start).total_seconds() // 3600) + 1
+        if span_hours > max_bars:
+            start = end - timedelta(hours=max_bars - 1)
+    meta: Dict[str, Any] = {
+        "origin": "download_real",
+        "requested_years": years,
+        "requested_max_bars": max_bars,
+        "research_hard_max": research_hard,
+        "casual_hard_max": casual_hard,
+        "partial": False,
+    }
+    svc = HistoricalDataService(session, settings=settings, source=source)
+    try:
+        payload = svc.download(
+            symbol,
+            timeframe=timeframe,
+            start=start,
+            end=end,
+            max_bars=max_bars,
+            resume=True,
+        )
+    finally:
+        svc.close()
+        # Restore casual hard max on shared settings instance
+        settings.historical_hard_max_bars = casual_hard
+
+    ds = payload.get("dataset") or {}
+    ds_id = ds.get("dataset_id")
+    download_info = payload.get("download") or {}
+    quality = payload.get("quality") or {}
+    if not ds_id:
+        # Resume may have skipped network with nothing newly registered — try catalog
+        bars, did, cat_meta = load_bars_from_catalog(
+            session,
+            dataset_id=None,
+            source=source,
+            symbol=symbol,
+            timeframe=timeframe,
+            max_bars=max_bars,
+        )
+        if not bars or not did:
+            raise ResearchError(
+                f"real download for {symbol} did not register a dataset; "
+                f"download={download_info}"
+            )
+        ds_id = did
+        meta.update(cat_meta)
+    else:
+        bars, did, cat_meta = load_bars_from_catalog(
+            session, dataset_id=ds_id, max_bars=max_bars
+        )
+        meta.update(cat_meta)
+        ds_id = did
+
+    assert_real_historical_eligible(ds_id, meta)
+    # Completeness vs request
+    expected = min(max_bars, int(years * 365.25 * 24) if timeframe == "1h" else max_bars)
+    if len(bars) < int(expected * 0.85):
+        meta["partial"] = True
+        meta["completeness_note"] = (
+            f"got {len(bars)} bars vs ~{expected} expected — partial or gappy"
+        )
+    meta["origin"] = "download_real"
+    meta["download"] = download_info
+    meta["quality"] = quality
+    meta["identity"] = ds
+    meta["start"] = bars[0].event_time.isoformat() if bars else None
+    meta["end"] = bars[-1].event_time.isoformat() if bars else None
+    meta["record_count"] = len(bars)
+    meta["timeframe"] = timeframe
+    meta["synthetic"] = False
+    return bars, ds_id, meta
 
 
 class ResearchCampaign:
@@ -238,12 +403,20 @@ class ResearchCampaign:
         out = Path(self.config.out_dir)
         out.mkdir(parents=True, exist_ok=True)
         git = current_git_commit()
+        real = bool(self.config.real_historical)
         summary: Dict[str, Any] = {
-            "phase": "4B",
+            "phase": "4B-REAL" if real else "4B",
+            "real_historical": real,
             "hypothesis": (
-                "Phase 4B research campaign: evaluate experimental controls "
-                "(BH BTC/ETH, SMA, momentum) under strict TRAIN/VAL/TEST, "
-                "cost profiles, WF, robustness. Not an edge search."
+                "Phase 4B-REAL: evaluate experimental controls on REAL Binance "
+                "Spot historical OHLCV under strict TRAIN/VAL/TEST, cost profiles, "
+                "WF, robustness. Not an edge search / not Phase 5."
+                if real
+                else (
+                    "Phase 4B research campaign: evaluate experimental controls "
+                    "(BH BTC/ETH, SMA, momentum) under strict TRAIN/VAL/TEST, "
+                    "cost profiles, WF, robustness. Not an edge search."
+                )
             ),
             "cost_profile": self.profile_name.value,
             "cost_assumptions": self.cost.to_dict(),
@@ -268,6 +441,8 @@ class ResearchCampaign:
                 raise ResearchError(f"too few bars for {symbol}: {len(bars)}")
             ds_id = (dataset_ids or {}).get(symbol) or f"fixture_{symbol.lower()}"
             meta = (dataset_meta or {}).get(symbol) or {"origin": "fixture"}
+            if real:
+                assert_real_historical_eligible(ds_id, meta)
             block = self._run_symbol(
                 symbol,
                 bars,
@@ -357,7 +532,8 @@ class ResearchCampaign:
             .get("oos_vs_buy_and_hold", {})
             .get("SMA_CROSS"),
             overfitting_risk=of_risk,
-            force_insufficient=True,  # Phase 4B default on small/demo windows
+            force_insufficient=bool(self.config.force_insufficient),
+            real_historical=real,
         )
         summary["evidence"] = evidence
         summary["EVIDENCE_STATUS"] = evidence["EVIDENCE_STATUS"]
@@ -376,12 +552,21 @@ class ResearchCampaign:
         )
         summary["btc_eth_stable"] = btc_eth_stable
         summary["limitations"] = [
-            "Small/demo windows → INSUFFICIENT_EVIDENCE by design",
+            (
+                "Real historical OHLCV evaluation ≠ confirmed edge; "
+                "default conclusions remain NO_EVIDENCE_OF_EDGE / INSUFFICIENT_EVIDENCE"
+                if real
+                else "Small/demo windows → INSUFFICIENT_EVIDENCE by design"
+            ),
             "OHLCV next-bar-open execution model (no venue microstructure)",
             "Parameter selection is a tiny neighborhood grid on VAL only — not an optimizer",
             "Historical download alone ≠ edge; synthetic/fixture = ENGINE_VALIDATION_ONLY",
-            "No live trading, no orders, no autonomy",
+            "REAL_HISTORICAL_EVIDENCE is evaluation evidence, not EDGE_CONFIRMED",
+            "No live trading, no orders, no autonomy, no Phase 5",
+            "Gaps are explicit (no imputation); partial downloads are flagged",
         ]
+        summary["PHASE5_JUSTIFIED"] = False
+        summary["consider_phase5"] = "NO — insufficient evidence of edge; do not proceed to Phase 5"
 
         (out / "campaign_summary.json").write_text(
             json.dumps(summary, indent=2, default=str), encoding="utf-8"
@@ -451,6 +636,12 @@ class ResearchCampaign:
             locked_parameters=locked_params["SMA_CROSS"],
         )
         test = split.test_bars(current_parameters=locked_params["SMA_CROSS"])
+        # Contamination check (params unchanged after peek → None)
+        contamination = detect_oos_contamination(
+            locked_params["SMA_CROSS"],
+            locked_params["SMA_CROSS"],
+            test_peeked=True,
+        )
 
         # Strategies with FIXED params
         if symbol == "BTCUSDT":
@@ -689,8 +880,12 @@ class ResearchCampaign:
             cost_sensitivity_label=sens.get("label"),
             vs_buy_and_hold=comps.get("SMA_CROSS"),
             overfitting_risk="HIGH",
-            force_insufficient=True,
+            force_insufficient=bool(self.config.force_insufficient),
+            real_historical=bool(self.config.real_historical),
         )
+        block["oos_contamination"] = contamination
+        block["OOS_CONTAMINATION"] = contamination is not None
+        block["split_violations"] = list(split.violations)
 
         # Registry — dataset_id + git_commit required
         if self.config.persist and session is not None:
@@ -703,7 +898,12 @@ class ResearchCampaign:
                 git_commit = current_git_commit() or "NO_GIT"
             conclusion = (
                 "NO_EVIDENCE_OF_EDGE + INSUFFICIENT_EVIDENCE — "
-                "Phase 4B campaign on small/demo window; not trading evidence."
+                + (
+                    "Phase 4B-REAL on public historical OHLCV; REAL_HISTORICAL_EVIDENCE "
+                    "≠ EDGE_CONFIRMED; does not justify Phase 5."
+                    if self.config.real_historical
+                    else "Phase 4B campaign on small/demo window; not trading evidence."
+                )
             )
             persist_experiment(
                 session,
@@ -742,13 +942,15 @@ class ResearchCampaign:
                 random_seed=seed,
                 cost_profile=self.profile_name.value,
                 extra={
-                    "phase": "4B",
+                    "phase": "4B-REAL" if self.config.real_historical else "4B",
                     "campaign": True,
+                    "real_historical": bool(self.config.real_historical),
                     "EVIDENCE_STATUS": block["evidence"]["EVIDENCE_STATUS"],
                     "EDGE_CONFIRMED": False,
                     "PROFITABLE": False,
                     "git_commit_required": git_commit,
                     "PARAMETERS_FIXED": True,
+                    "OOS_CONTAMINATION": False,
                 },
             )
             # Ensure git_commit column set (persist_experiment uses reproducibility)
@@ -874,3 +1076,120 @@ def run_research_campaign(
     finally:
         if session is not None:
             session.close()
+
+
+
+def run_real_research_campaign(
+    *,
+    out_dir: str | Path = "data/experiments/campaign_real",
+    database_url: str | None = None,
+    symbols: Sequence[str] | None = None,
+    timeframe: str = "1h",
+    years: float = 2.0,
+    max_bars: int = 20000,
+    seed: int = 7,
+    persist: bool = True,
+    cost_profile: str | None = None,
+    allow_catalog_only: bool = False,
+) -> Dict[str, Any]:
+    """Phase 4B-REAL: download/catalog real Binance Spot history and run campaign.
+
+    Uses elevated research hard max (default 30000). Never falls back to fixtures.
+    Evidence = REAL_HISTORICAL_EVIDENCE (not ENGINE_VALIDATION_ONLY).
+    Never EDGE_CONFIRMED / PROFITABLE. Does not justify Phase 5 by default.
+    """
+    from crypto_lab.data.database import get_session_factory, init_db
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    settings = get_settings()
+    if settings.mode != "PAPER" or settings.live_trading:
+        raise ResearchError("Real campaign requires MODE=PAPER and LIVE_TRADING=False")
+
+    syms = list(symbols) if symbols else list(settings.symbols)
+    cfg = CampaignConfig(
+        symbols=syms,
+        timeframe=timeframe,
+        seed=seed,
+        cost_profile=cost_profile or settings.research_cost_profile,
+        persist=persist,
+        out_dir=str(out_dir),
+        real_historical=True,
+        # Real windows may still be insufficient on trades/WF; do not force by default
+        # when sample gates can speak for themselves — still never EDGE_CONFIRMED.
+        force_insufficient=False,
+    )
+    campaign = ResearchCampaign(cfg)
+
+    url = database_url or settings.database_url
+    init_db(url)
+    Session = get_session_factory(url)
+    session = Session()
+    series: Dict[str, List[Bar]] = {}
+    dataset_ids: Dict[str, str] = {}
+    dataset_meta: Dict[str, Dict[str, Any]] = {}
+    download_log: Dict[str, Any] = {}
+
+    try:
+        for sym in syms:
+            bars: List[Bar] = []
+            did = ""
+            meta: Dict[str, Any] = {}
+            if allow_catalog_only:
+                bars, did, meta = load_bars_from_catalog(
+                    session,
+                    dataset_id=None,
+                    symbol=sym,
+                    timeframe=timeframe,
+                    max_bars=max_bars,
+                )
+                if bars and did:
+                    meta = {**meta, "origin": meta.get("origin") or "catalog"}
+                    meta["synthetic"] = False
+            if not bars:
+                bars, did, meta = download_real_historical(
+                    session,
+                    symbol=sym,
+                    timeframe=timeframe,
+                    years=years,
+                    max_bars=max_bars,
+                    source="binance",
+                )
+            assert_real_historical_eligible(did, meta)
+            series[sym] = bars
+            dataset_ids[sym] = did
+            dataset_meta[sym] = meta
+            download_log[sym] = {
+                "dataset_id": did,
+                "record_count": len(bars),
+                "partial": meta.get("partial"),
+                "start": meta.get("start"),
+                "end": meta.get("end"),
+                "timeframe": timeframe,
+                "quality": meta.get("quality"),
+                "checksum": meta.get("checksum"),
+            }
+
+        summary = campaign.run_on_bars(
+            series,
+            dataset_ids=dataset_ids,
+            dataset_meta=dataset_meta,
+            session=session if persist else None,
+        )
+        summary["download_log"] = download_log
+        summary["phase"] = "4B-REAL"
+        summary["real_historical"] = True
+        summary["PHASE5_JUSTIFIED"] = False
+        summary["consider_phase5"] = (
+            "NO — results do not justify considering Phase 5 "
+            "(insufficient / no evidence of edge on real historical evaluation)"
+        )
+        # Persist JSON under experiments (gitignored) already via out_dir
+        outp = Path(out_dir)
+        outp.mkdir(parents=True, exist_ok=True)
+        (outp / "campaign_real_summary.json").write_text(
+            json.dumps(summary, indent=2, default=str), encoding="utf-8"
+        )
+        return summary
+    finally:
+        session.close()

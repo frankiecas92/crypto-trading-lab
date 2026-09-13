@@ -6,5 +6,5 @@ No live trading, no real order execution, no paper-trading live loop.
 MODE=PAPER / LIVE_TRADING=False remain mandatory.
 """
 
-__version__ = "0.4.1"
-__phase__ = "4B"
+__version__ = "0.4.2"
+__phase__ = "4B-REAL"

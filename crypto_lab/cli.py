@@ -485,12 +485,14 @@ def research_campaign_grp() -> None:
 @click.option("--symbol", "symbols", multiple=True, help="Symbol (repeatable; default BTC+ETH)")
 @click.option("--timeframe", default="1h", show_default=True)
 @click.option("--seed", default=7, show_default=True, type=int)
-@click.option("--max-bars", default=120, show_default=True, type=int, help="Small safe window")
+@click.option("--max-bars", default=120, show_default=True, type=int, help="Small safe window (or real-campaign size with --real)")
 @click.option("--fixture", is_flag=True, default=False, help="Use synthetic fixtures (no network)")
 @click.option("--allow-download", is_flag=True, default=False, help="If catalog empty, download small public window")
 @click.option("--no-persist", is_flag=True, default=False, help="Skip SQLite experiment rows")
 @click.option("--cost-profile", default=None, help="BASE / CONSERVATIVE / STRESS")
 @click.option("--fixture-bars", default=120, show_default=True, type=int)
+@click.option("--real", is_flag=True, default=False, help="Phase 4B-REAL: real Binance history (elevated hard max)")
+@click.option("--years", default=2.0, show_default=True, type=float, help="Years of history for --real")
 def research_campaign_run(
     out_dir: str,
     database_url: str | None,
@@ -504,36 +506,64 @@ def research_campaign_run(
     no_persist: bool,
     cost_profile: str | None,
     fixture_bars: int,
+    real: bool,
+    years: float,
 ) -> None:
-    """Run Phase 4B research campaign protocol (safe defaults / small range)."""
+    """Run Phase 4B research campaign protocol (safe defaults / small range).
+
+    Use --real (or run-real) for Phase 4B-REAL on public Binance Spot history.
+    """
     from crypto_lab.execution.safety import guard_live_trading
-    from crypto_lab.research.campaign import run_research_campaign
 
     guard_live_trading()
-    summary = run_research_campaign(
-        out_dir=out_dir,
-        database_url=database_url,
-        dataset_id=dataset_id,
-        symbols=list(symbols) if symbols else None,
-        timeframe=timeframe,
-        seed=seed,
-        max_bars=max_bars,
-        persist=not no_persist,
-        use_fixture=fixture,
-        allow_download=allow_download,
-        cost_profile=cost_profile,
-        n_fixture=fixture_bars,
-    )
+    if real and fixture:
+        raise click.ClickException("--real and --fixture are mutually exclusive")
+    if real:
+        from crypto_lab.research.campaign import run_real_research_campaign
+
+        # Casual CLI default max-bars=120; for --real bump to research-sized window
+        real_max = max_bars if max_bars and max_bars > 120 else 20000
+        summary = run_real_research_campaign(
+            out_dir=out_dir if out_dir != "data/experiments/campaign" else "data/experiments/campaign_real",
+            database_url=database_url,
+            symbols=list(symbols) if symbols else None,
+            timeframe=timeframe,
+            years=years,
+            max_bars=real_max,
+            seed=seed,
+            persist=not no_persist,
+            cost_profile=cost_profile,
+        )
+    else:
+        from crypto_lab.research.campaign import run_research_campaign
+
+        summary = run_research_campaign(
+            out_dir=out_dir,
+            database_url=database_url,
+            dataset_id=dataset_id,
+            symbols=list(symbols) if symbols else None,
+            timeframe=timeframe,
+            seed=seed,
+            max_bars=max_bars,
+            persist=not no_persist,
+            use_fixture=fixture,
+            allow_download=allow_download,
+            cost_profile=cost_profile,
+            n_fixture=fixture_bars,
+        )
     evidence = summary.get("evidence") or {}
     click.echo(
         json.dumps(
             {
-                "phase": "4B",
+                "phase": summary.get("phase", "4B"),
+                "real_historical": bool(summary.get("real_historical")),
                 "out": out_dir,
                 "EVIDENCE_STATUS": summary.get("EVIDENCE_STATUS"),
                 "scientific_conclusion": summary.get("scientific_conclusion"),
                 "EDGE_CONFIRMED": False,
                 "PROFITABLE": False,
+                "PHASE5_JUSTIFIED": summary.get("PHASE5_JUSTIFIED", False),
+                "consider_phase5": summary.get("consider_phase5"),
                 "overfitting_risk": summary.get("overfitting_risk"),
                 "symbols": list(summary.get("symbols", {})),
                 "datasets": {
@@ -543,6 +573,77 @@ def research_campaign_run(
                 "cost_profile": summary.get("cost_profile"),
                 "git_commit": summary.get("git_commit"),
                 "why": evidence.get("why", [])[:5],
+                "MODE": summary.get("MODE"),
+                "LIVE_TRADING": summary.get("LIVE_TRADING"),
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+
+@research_campaign_grp.command("run-real")
+@click.option("--out", "out_dir", default="data/experiments/campaign_real", show_default=True)
+@click.option("--database-url", default=None, help="Override DATABASE_URL")
+@click.option("--symbol", "symbols", multiple=True, help="Symbol (repeatable; default BTC+ETH)")
+@click.option("--timeframe", default="1h", show_default=True)
+@click.option("--years", default=2.0, show_default=True, type=float)
+@click.option("--max-bars", default=20000, show_default=True, type=int)
+@click.option("--seed", default=7, show_default=True, type=int)
+@click.option("--no-persist", is_flag=True, default=False)
+@click.option("--cost-profile", default=None, help="BASE / CONSERVATIVE / STRESS")
+@click.option("--catalog-only", is_flag=True, default=False, help="Prefer existing catalog; download if missing")
+def research_campaign_run_real(
+    out_dir: str,
+    database_url: str | None,
+    symbols: tuple[str, ...],
+    timeframe: str,
+    years: float,
+    max_bars: int,
+    seed: int,
+    no_persist: bool,
+    cost_profile: str | None,
+    catalog_only: bool,
+) -> None:
+    """Phase 4B-REAL: real Binance Spot historical evaluation (elevated hard max)."""
+    from crypto_lab.execution.safety import guard_live_trading
+    from crypto_lab.research.campaign import run_real_research_campaign
+
+    guard_live_trading()
+    summary = run_real_research_campaign(
+        out_dir=out_dir,
+        database_url=database_url,
+        symbols=list(symbols) if symbols else None,
+        timeframe=timeframe,
+        years=years,
+        max_bars=max_bars,
+        seed=seed,
+        persist=not no_persist,
+        cost_profile=cost_profile,
+        allow_catalog_only=catalog_only,
+    )
+    evidence = summary.get("evidence") or {}
+    click.echo(
+        json.dumps(
+            {
+                "phase": "4B-REAL",
+                "real_historical": True,
+                "out": out_dir,
+                "EVIDENCE_STATUS": summary.get("EVIDENCE_STATUS"),
+                "scientific_conclusion": summary.get("scientific_conclusion"),
+                "EDGE_CONFIRMED": False,
+                "PROFITABLE": False,
+                "PHASE5_JUSTIFIED": False,
+                "consider_phase5": summary.get("consider_phase5"),
+                "download_log": summary.get("download_log"),
+                "symbols": list(summary.get("symbols", {})),
+                "datasets": {
+                    s: (b.get("dataset_id") if isinstance(b, dict) else None)
+                    for s, b in (summary.get("symbols") or {}).items()
+                },
+                "registry_counters": summary.get("registry_counters"),
+                "git_commit": summary.get("git_commit"),
+                "why": evidence.get("why", [])[:8],
                 "MODE": summary.get("MODE"),
                 "LIVE_TRADING": summary.get("LIVE_TRADING"),
             },

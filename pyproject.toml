@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crypto-trading-lab"
-version = "0.4.1"
-description = "Phase 4B — Research campaign / strategy evaluation + 4A historical + Phase 3 research + Phase 2 Data Engine (no live trading)"
+version = "0.4.2"
+description = "Phase 4B-REAL — historical strategy evaluation on real Binance Spot OHLCV (no live trading)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
