@@ -27,6 +27,11 @@ EXPECTED_TABLES = frozenset(
         "data_quality_events",
         # Phase 3
         "experiments",
+        # Phase 4A
+        "historical_datasets",
+        "dataset_gaps",
+        "dataset_snapshots",
+        "dataset_quality_summaries",
     }
 )
 
@@ -101,12 +106,13 @@ def reset_engine() -> None:
 
 
 def init_db(database_url: str | None = None) -> Engine:
-    """Create all tables (create_all) and apply additive Phase 2/3 migrations."""
+    """Create all tables (create_all) and apply additive Phase 2/3/4A migrations."""
     engine = get_engine(database_url)
     try:
         Base.metadata.create_all(bind=engine)
         apply_phase2_migrations(engine)
         apply_phase3_migrations(engine)
+        apply_phase4a_migrations(engine)
     except Exception as exc:  # noqa: BLE001
         raise DatabaseError(f"Failed to initialize schema: {exc}") from exc
     return engine
@@ -119,7 +125,7 @@ def list_tables(engine: Engine | None = None) -> set[str]:
 
 
 def schema_complete(engine: Engine | None = None) -> bool:
-    """True if all expected Phase 1+2+3 tables exist."""
+    """True if all expected Phase 1+2+3+4A tables exist."""
     return EXPECTED_TABLES.issubset(list_tables(engine))
 
 
@@ -314,3 +320,37 @@ def apply_phase3_migrations(engine: Engine) -> list[str]:
     if "experiments" in insp.get_table_names():
         actions.append("ensure experiments")
     return actions
+
+
+def apply_phase4a_migrations(engine: Engine) -> list[str]:
+    """Additive Phase 4A migrations. Idempotent. New tables via create_all."""
+    actions: list[str] = []
+    Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_market_data_src_sym_tf_et "
+                "ON market_data (source, symbol, timeframe, event_time)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_historical_datasets_src_sym_tf "
+                "ON historical_datasets (source, symbol, timeframe)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_dataset_gaps_dataset_id "
+                "ON dataset_gaps (dataset_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_dataset_snapshots_dataset_id "
+                "ON dataset_snapshots (dataset_id)"
+            )
+        )
+    actions.append("ensure historical_datasets/gaps/snapshots/quality + indexes")
+    return actions
+

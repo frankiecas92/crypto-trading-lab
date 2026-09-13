@@ -247,3 +247,95 @@ class Experiment(Base):
     random_seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     extra_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class HistoricalDataset(Base):
+    """Phase 4A dataset catalog entry (content-addressed identity)."""
+
+    __tablename__ = "historical_datasets"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", name="uq_historical_datasets_id"),
+        Index("ix_historical_datasets_src_sym_tf", "source", "symbol", "timeframe"),
+        Index("ix_historical_datasets_start_end", "start_time", "end_time"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    base_asset: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    quote_asset: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    canonical_asset: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    timeframe: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    data_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    git_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="UNKNOWN")
+    quality_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    split_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    test_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DatasetGap(Base):
+    """Recorded gaps — never imputed as real market data."""
+
+    __tablename__ = "dataset_gaps"
+    __table_args__ = (
+        Index("ix_dataset_gaps_range", "gap_start", "gap_end"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    gap_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    gap_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expected_records: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actual_records: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="warn")
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DatasetSnapshot(Base):
+    """Reproducible snapshot of the exact dataset used."""
+
+    __tablename__ = "dataset_snapshots"
+    __table_args__ = (UniqueConstraint("snapshot_id", name="uq_dataset_snapshots_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    data_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(16), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    git_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DatasetQualitySummary(Base):
+    """Dataset-level quality summary (VALID / VALID_WITH_WARNINGS / INVALID)."""
+
+    __tablename__ = "dataset_quality_summaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    critical_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    warnings: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    gap_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+

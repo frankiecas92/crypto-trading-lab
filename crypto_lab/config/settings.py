@@ -83,6 +83,20 @@ class Settings(BaseSettings):
     research_min_oos_bars: int = Field(default=40, description="Min OOS/test bars")
     research_min_wf_windows: int = Field(default=3, description="Min walk-forward windows")
 
+    # --- Phase 4A historical dataset pipeline (public data, safe small defaults) ---
+    historical_max_bars: int = Field(
+        default=200, description="Default max bars per historical download (small)"
+    )
+    historical_hard_max_bars: int = Field(
+        default=2000, description="Refuse downloads requesting more bars than this"
+    )
+    historical_default_timeframe: str = Field(
+        default="1h", description="Default historical download timeframe"
+    )
+    historical_data_version: str = Field(
+        default="4A.1", description="Dataset content schema version"
+    )
+
     @field_validator("mode", mode="before")
     @classmethod
     def normalize_mode(cls, v: object) -> str:

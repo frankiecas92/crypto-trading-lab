@@ -35,3 +35,17 @@ Applied by `init_db()` → `apply_phase3_migrations()`:
 2. Reuses existing `strategy_versions` (no silent overwrite)
 
 See `003_phase3_research.sql`. Idempotent. No destructive drops.
+
+
+## Phase 4A (Historical Dataset Pipeline) — additive
+Applied by `init_db()` → `apply_phase4a_migrations()`:
+
+1. **New tables**: `historical_datasets`, `dataset_gaps`, `dataset_snapshots`,
+   `dataset_quality_summaries`
+2. **Index** `ix_market_data_src_sym_tf_et` on
+   `market_data(source, symbol, timeframe, event_time)` for resume/range reads
+3. `event_time` remains exchange time; `received_at` remains local receive time
+
+See `004_phase4a_historical.sql`. Idempotent. No destructive drops.
+TEST remains locked by default on catalog rows. No profitability claims.
+

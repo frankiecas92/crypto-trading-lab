@@ -1,11 +1,12 @@
-# Crypto Trading Lab — Phase 3 (Strategy Research Lab)
+# Crypto Trading Lab — Phase 4A (Historical Dataset Pipeline)
 
 **ES / EN** — Laboratorio de investigación: motor de datos públicos + backtest histórico.  
-**Phase 3**: Strategy Research Lab sobre Data Engine Phase 2 e infraestructura Phase 1.  
+**Phase 4A**: pipeline de datasets históricos sobre Phase 3 research + Phase 2 Data Engine + Phase 1 infra.  
 **No** trading real, **no** órdenes reales, **no** bucle paper en vivo, **no** apalancamiento, **no** API keys.
 
 - Data Engine: [`docs/DATA_ENGINE.md`](docs/DATA_ENGINE.md)
 - Research lab: [`docs/STRATEGY_RESEARCH_LAB.md`](docs/STRATEGY_RESEARCH_LAB.md)
+- Historical datasets: [`docs/HISTORICAL_DATA.md`](docs/HISTORICAL_DATA.md)
 
 ---
 
@@ -18,6 +19,7 @@
 | 4 benchmark controls (BH BTC/ETH, SMA, momentum) | Edge-hunting / auto-optimize |
 | IS/OOS, walk-forward, robustness, Monte Carlo | Leverage / money / agents |
 | Experiment registry (SQLite + JSON) | Trading API keys |
+| Historical download / validate / snapshot (4A) | EDGE_CONFIRMED / PROFITABLE claims |
 
 ---
 
@@ -43,6 +45,8 @@ crypto-lab health --json
 crypto-lab data fetch-rest --limit 5
 crypto-lab data validate-sample
 crypto-lab experiment demo --bars 180 --seed 7
+crypto-lab historical-data download --timeframe 1h --max-bars 72
+crypto-lab historical-data status
 ```
 
 ## Tests

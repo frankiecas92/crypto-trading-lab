@@ -77,11 +77,20 @@ class BinanceSpotProvider(DataProvider):
         *,
         timeframe: str = "1m",
         limit: int = 50,
+        start=None,
+        end=None,
     ) -> List[CanonicalCandle]:
+        from crypto_lab.data.records import datetime_to_ms
+
         bsym = to_binance_symbol(symbol)
+        params: dict = {"symbol": bsym, "interval": timeframe, "limit": limit}
+        if start is not None:
+            params["startTime"] = datetime_to_ms(start)
+        if end is not None:
+            params["endTime"] = datetime_to_ms(end)
         rows = self._get(
             "/api/v3/klines",
-            params={"symbol": bsym, "interval": timeframe, "limit": limit},
+            params=params,
         )
         received_at = datetime.now(timezone.utc)
         return [

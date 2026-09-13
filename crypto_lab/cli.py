@@ -1,4 +1,4 @@
-"""CLI entrypoint: init-db, health, version, data, experiment demo."""
+"""CLI entrypoint: init-db, health, version, data, experiment demo, historical-data."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from crypto_lab.monitoring.health import run_health_checks
 @click.option("--log-level", default=None, help="Override LOG_LEVEL")
 @click.pass_context
 def main(ctx: click.Context, log_level: str | None) -> None:
-    """Crypto Trading Lab — Phase 3 Strategy Research Lab (paper / no live trading)."""
+    """Crypto Trading Lab — Phase 4A Historical Dataset Pipeline (paper / no live trading)."""
     settings = get_settings()
     level = (log_level or settings.log_level).upper()
     setup_logging(level=level)
@@ -56,7 +56,7 @@ def info_cmd() -> None:
 @main.command("init-db")
 @click.option("--database-url", default=None, help="Override DATABASE_URL")
 def init_db_cmd(database_url: str | None) -> None:
-    """Create SQLite schema (Phase 1 + Phase 2 tables) and apply additive migrations."""
+    """Create SQLite schema (Phase 1–4A tables) and apply additive migrations."""
     settings = get_settings()
     url = database_url or settings.database_url
     reset_engine()
@@ -307,3 +307,164 @@ def experiment_demo(
             indent=2,
         )
     )
+
+
+def _parse_iso(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime, timezone
+
+    raw = value.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    dt = datetime.fromisoformat(raw)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+@main.group("historical-data")
+def historical_data_grp() -> None:
+    """Phase 4A historical dataset pipeline (public REST, small safe defaults).
+
+    Not trading evidence. Never EDGE_CONFIRMED / PROFITABLE. TEST stays locked.
+    """
+
+
+@historical_data_grp.command("download")
+@click.option("--source", default="binance", show_default=True, help="binance | coinbase")
+@click.option("--symbol", default="BTCUSDT", show_default=True)
+@click.option("--timeframe", default="1h", show_default=True)
+@click.option("--start", default=None, help="UTC ISO start (default: now-3d)")
+@click.option("--end", default=None, help="UTC ISO end (default: now)")
+@click.option("--max-bars", default=200, show_default=True, type=int, help="Small cap; huge ranges refused")
+@click.option("--no-resume", is_flag=True, default=False, help="Re-fetch even if candles exist")
+@click.option("--database-url", default=None)
+def historical_download(
+    source: str,
+    symbol: str,
+    timeframe: str,
+    start: str | None,
+    end: str | None,
+    max_bars: int,
+    no_resume: bool,
+    database_url: str | None,
+) -> None:
+    """Download a small public OHLCV range, validate, store, and register a dataset."""
+    from crypto_lab.data.database import get_session_factory, init_db, reset_engine
+    from crypto_lab.data.historical.service import HistoricalDataService
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    settings = get_settings()
+    url = database_url or settings.database_url
+    reset_engine()
+    init_db(url)
+    Session = get_session_factory(url)
+    with Session() as session:
+        svc = HistoricalDataService(session, settings=settings, source=source)
+        try:
+            payload = svc.download(
+                symbol,
+                timeframe=timeframe,
+                start=_parse_iso(start),
+                end=_parse_iso(end),
+                max_bars=max_bars,
+                resume=not no_resume,
+            )
+            click.echo(json.dumps(payload, indent=2, default=str))
+        finally:
+            svc.close()
+
+
+@historical_data_grp.command("validate")
+@click.option("--dataset-id", default=None)
+@click.option("--source", default=None)
+@click.option("--symbol", default=None)
+@click.option("--timeframe", default="1h", show_default=True)
+@click.option("--start", default=None)
+@click.option("--end", default=None)
+@click.option("--database-url", default=None)
+def historical_validate(
+    dataset_id: str | None,
+    source: str | None,
+    symbol: str | None,
+    timeframe: str,
+    start: str | None,
+    end: str | None,
+    database_url: str | None,
+) -> None:
+    """Validate a registered dataset or a stored source/symbol/time range."""
+    from crypto_lab.data.database import get_session_factory, init_db, reset_engine
+    from crypto_lab.data.historical.service import HistoricalDataService
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    settings = get_settings()
+    url = database_url or settings.database_url
+    reset_engine()
+    init_db(url)
+    Session = get_session_factory(url)
+    with Session() as session:
+        svc = HistoricalDataService(session, settings=settings, source=source or "binance")
+        try:
+            payload = svc.validate(
+                dataset_id=dataset_id,
+                source=source,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=_parse_iso(start),
+                end=_parse_iso(end),
+            )
+            click.echo(json.dumps(payload, indent=2, default=str))
+        finally:
+            svc.close()
+
+
+@historical_data_grp.command("status")
+@click.option("--dataset-id", default=None)
+@click.option("--database-url", default=None)
+def historical_status(dataset_id: str | None, database_url: str | None) -> None:
+    """Show catalog status (quality, gaps, TEST lock). No profitability claims."""
+    from crypto_lab.data.database import get_session_factory, init_db, reset_engine
+    from crypto_lab.data.historical.service import HistoricalDataService
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    settings = get_settings()
+    url = database_url or settings.database_url
+    reset_engine()
+    init_db(url)
+    Session = get_session_factory(url)
+    with Session() as session:
+        svc = HistoricalDataService(session, settings=settings)
+        try:
+            payload = svc.status(dataset_id)
+            click.echo(json.dumps(payload, indent=2, default=str))
+        finally:
+            svc.close()
+
+
+@historical_data_grp.command("snapshot")
+@click.option("--dataset-id", required=True)
+@click.option("--database-url", default=None)
+def historical_snapshot(dataset_id: str, database_url: str | None) -> None:
+    """Write a reproducible snapshot of the exact dataset (id/version/checksum)."""
+    from crypto_lab.data.database import get_session_factory, init_db, reset_engine
+    from crypto_lab.data.historical.service import HistoricalDataService
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    settings = get_settings()
+    url = database_url or settings.database_url
+    reset_engine()
+    init_db(url)
+    Session = get_session_factory(url)
+    with Session() as session:
+        svc = HistoricalDataService(session, settings=settings)
+        try:
+            payload = svc.snapshot(dataset_id)
+            click.echo(json.dumps(payload, indent=2, default=str))
+        finally:
+            svc.close()
+

@@ -45,8 +45,14 @@ class DataProvider(ABC):
         *,
         timeframe: str = "1m",
         limit: int = 50,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> List[CanonicalCandle]:
-        """REST backfill / snapshot of OHLCV candles."""
+        """REST backfill / snapshot of OHLCV candles.
+
+        Optional ``start`` / ``end`` (UTC) enable historical pagination.
+        Omitted → provider default (typically most recent ``limit`` bars).
+        """
 
     @abstractmethod
     def fetch_ticker(self, symbol: str) -> CanonicalQuote:

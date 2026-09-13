@@ -157,6 +157,7 @@ def build_evidence_block(
         "scientific_conclusions": conclusions,
         "scientific_conclusion": " + ".join(conclusions),
         "EDGE_CONFIRMED": False,
+        "PROFITABLE": False,
         "dataset_id": dataset_id,
         "synthetic": synthetic,
     }
@@ -169,3 +170,41 @@ def build_evidence_block(
             block["scientific_conclusions"] = conclusions
             block["scientific_conclusion"] = " + ".join(conclusions)
     return block
+
+
+def assert_not_edge_or_profitable(block: Dict[str, Any]) -> None:
+    """Historical download / research blocks must never claim edge or profit."""
+    if block.get("EDGE_CONFIRMED") is True:
+        raise ValueError("EDGE_CONFIRMED must never be emitted for this evidence block")
+    if block.get("PROFITABLE") is True:
+        raise ValueError("PROFITABLE must never be emitted for this evidence block")
+
+
+def build_historical_download_evidence(
+    *,
+    dataset_id: str | None,
+    synthetic: bool = False,
+) -> Dict[str, Any]:
+    """Evidence for a historical dataset download/validate.
+
+    Public REST history is NOT trading evidence. Never EDGE_CONFIRMED or PROFITABLE.
+    Synthetic remains ENGINE_VALIDATION_ONLY.
+    """
+    if synthetic or is_synthetic_dataset(dataset_id):
+        block = build_evidence_block(dataset_id=dataset_id or "synthetic_historical")
+    else:
+        block = build_evidence_block(dataset_id=dataset_id)
+        # Real history is a candidate at most; Phase 4A still withholds edge claims.
+        block["scientific_conclusions"] = synthetic_scientific_conclusions()
+        block["scientific_conclusion"] = " + ".join(block["scientific_conclusions"])
+    block["EDGE_CONFIRMED"] = False
+    block["PROFITABLE"] = False
+    block["historical_download"] = True
+    block["note"] = (
+        "Downloading or validating historical public market data does not "
+        "constitute EDGE_CONFIRMED or PROFITABLE trading evidence."
+    )
+    assert_not_edge_or_profitable(block)
+    assert_not_edge_confirmed_for_synthetic(block["EVIDENCE_STATUS"], dataset_id)
+    return block
+

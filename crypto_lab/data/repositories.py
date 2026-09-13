@@ -11,6 +11,11 @@ from sqlalchemy.orm import Session
 from crypto_lab.data.models import (
     Base,
     DataQualityEvent,
+    DatasetGap,
+    DatasetQualitySummary,
+    DatasetSnapshot,
+    Experiment,
+    HistoricalDataset,
     MarketData,
     MarketQuote,
     MarketTrade,
@@ -20,7 +25,6 @@ from crypto_lab.data.models import (
     StrategyVersion,
     SystemEvent,
     Trade,
-    Experiment,
 )
 
 T = TypeVar("T", bound=Base)
@@ -100,6 +104,31 @@ class MarketDataRepository(Repository[MarketData]):
             .where(and_(*clauses))
             .order_by(MarketData.ts.asc())
             .limit(limit)
+        )
+        return list(self.session.scalars(stmt).all())
+
+    def list_candles_range(
+        self,
+        *,
+        source: str,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+    ) -> Sequence[MarketData]:
+        """Candles in [start, end] inclusive, ordered by event/ts. No row cap."""
+        stmt = (
+            select(MarketData)
+            .where(
+                and_(
+                    MarketData.source == source,
+                    MarketData.symbol == symbol,
+                    MarketData.timeframe == timeframe,
+                    MarketData.ts >= start,
+                    MarketData.ts <= end,
+                )
+            )
+            .order_by(MarketData.ts.asc())
         )
         return list(self.session.scalars(stmt).all())
 
@@ -226,3 +255,61 @@ class StrategyVersionRepository(Repository[StrategyVersion]):
 class ExperimentRepository(Repository[Experiment]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, Experiment)
+
+
+class HistoricalDatasetRepository(Repository[HistoricalDataset]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, HistoricalDataset)
+
+    def find_by_dataset_id(self, dataset_id: str) -> Optional[HistoricalDataset]:
+        stmt = select(HistoricalDataset).where(HistoricalDataset.dataset_id == dataset_id)
+        return self.session.scalars(stmt).first()
+
+    def list_datasets(self, limit: int = 100) -> Sequence[HistoricalDataset]:
+        stmt = select(HistoricalDataset).order_by(HistoricalDataset.created_at.desc()).limit(limit)
+        return list(self.session.scalars(stmt).all())
+
+
+class DatasetGapRepository(Repository[DatasetGap]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, DatasetGap)
+
+    def list_for_dataset(self, dataset_id: str) -> Sequence[DatasetGap]:
+        stmt = (
+            select(DatasetGap)
+            .where(DatasetGap.dataset_id == dataset_id)
+            .order_by(DatasetGap.gap_start.asc())
+        )
+        return list(self.session.scalars(stmt).all())
+
+
+class DatasetSnapshotRepository(Repository[DatasetSnapshot]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, DatasetSnapshot)
+
+    def find_by_snapshot_id(self, snapshot_id: str) -> Optional[DatasetSnapshot]:
+        stmt = select(DatasetSnapshot).where(DatasetSnapshot.snapshot_id == snapshot_id)
+        return self.session.scalars(stmt).first()
+
+    def list_for_dataset(self, dataset_id: str) -> Sequence[DatasetSnapshot]:
+        stmt = (
+            select(DatasetSnapshot)
+            .where(DatasetSnapshot.dataset_id == dataset_id)
+            .order_by(DatasetSnapshot.created_at.desc())
+        )
+        return list(self.session.scalars(stmt).all())
+
+
+class DatasetQualitySummaryRepository(Repository[DatasetQualitySummary]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, DatasetQualitySummary)
+
+    def latest_for_dataset(self, dataset_id: str) -> Optional[DatasetQualitySummary]:
+        stmt = (
+            select(DatasetQualitySummary)
+            .where(DatasetQualitySummary.dataset_id == dataset_id)
+            .order_by(DatasetQualitySummary.created_at.desc())
+            .limit(1)
+        )
+        return self.session.scalars(stmt).first()
+

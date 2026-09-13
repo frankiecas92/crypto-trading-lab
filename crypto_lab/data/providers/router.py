@@ -87,11 +87,21 @@ class FallbackProvider(DataProvider):
         *,
         timeframe: str = "1m",
         limit: int = 50,
+        start=None,
+        end=None,
     ) -> List[CanonicalCandle]:
+        def _call(prov):
+            try:
+                return prov.fetch_klines(
+                    symbol, timeframe=timeframe, limit=limit, start=start, end=end
+                )
+            except TypeError:
+                return prov.fetch_klines(symbol, timeframe=timeframe, limit=limit)
+
         return self._try(
             "fetch_klines",
-            lambda: self.primary.fetch_klines(symbol, timeframe=timeframe, limit=limit),
-            lambda: self.fallback.fetch_klines(symbol, timeframe=timeframe, limit=limit),
+            lambda: _call(self.primary),
+            lambda: _call(self.fallback),
         )
 
     def fetch_ticker(self, symbol: str) -> CanonicalQuote:

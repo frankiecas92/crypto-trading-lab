@@ -81,15 +81,22 @@ class CoinbaseExchangeProvider(DataProvider):
         *,
         timeframe: str = "1m",
         limit: int = 50,
+        start=None,
+        end=None,
     ) -> List[CanonicalCandle]:
         product = to_coinbase_product(symbol)
         gran = _GRANULARITY.get(timeframe)
         if gran is None:
             raise ProviderError(f"Unsupported Coinbase timeframe: {timeframe}")
-        # Coinbase returns newest first; no explicit limit — use end/start window
+        # Coinbase returns newest first; optional start/end window for pagination
+        params: dict = {"granularity": gran}
+        if start is not None:
+            params["start"] = start.astimezone(timezone.utc).isoformat()
+        if end is not None:
+            params["end"] = end.astimezone(timezone.utc).isoformat()
         rows = self._get(
             f"/products/{product}/candles",
-            params={"granularity": gran},
+            params=params,
         )
         received_at = datetime.now(timezone.utc)
         candles = [
@@ -99,7 +106,13 @@ class CoinbaseExchangeProvider(DataProvider):
             for row in rows
         ]
         candles.sort(key=lambda c: c.event_time)
-        return candles[-limit:]
+        if start is not None:
+            candles = [c for c in candles if c.event_time >= start]
+        if end is not None:
+            candles = [c for c in candles if c.event_time <= end]
+        if start is None and end is None:
+            return candles[-limit:]
+        return candles[:limit]
 
     def fetch_ticker(self, symbol: str) -> CanonicalQuote:
         product = to_coinbase_product(symbol)
