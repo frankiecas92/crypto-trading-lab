@@ -9,9 +9,9 @@ def test_cli_version():
     runner = CliRunner()
     result = runner.invoke(main, ["version"])
     assert result.exit_code == 0
-    assert "0.4.0" in result.output
+    assert "0.4.1" in result.output
     assert "PAPER" in result.output
-    assert "4A" in result.output
+    assert "4B" in result.output
 
 
 def test_cli_init_db_and_health(tmp_path, monkeypatch):

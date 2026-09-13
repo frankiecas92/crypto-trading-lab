@@ -32,7 +32,7 @@ class SampleStatus(str, Enum):
     INSUFFICIENT_SAMPLE = "INSUFFICIENT_SAMPLE"
 
 
-SYNTHETIC_DATASET_PREFIXES = ("synthetic", "demo")
+SYNTHETIC_DATASET_PREFIXES = ("synthetic", "demo", "fixture")
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,7 @@ from crypto_lab.monitoring.health import run_health_checks
 @click.option("--log-level", default=None, help="Override LOG_LEVEL")
 @click.pass_context
 def main(ctx: click.Context, log_level: str | None) -> None:
-    """Crypto Trading Lab — Phase 4A Historical Dataset Pipeline (paper / no live trading)."""
+    """Crypto Trading Lab — Phase 4B Research Campaign (paper / no live trading)."""
     settings = get_settings()
     level = (log_level or settings.log_level).upper()
     setup_logging(level=level)
@@ -56,7 +56,7 @@ def info_cmd() -> None:
 @main.command("init-db")
 @click.option("--database-url", default=None, help="Override DATABASE_URL")
 def init_db_cmd(database_url: str | None) -> None:
-    """Create SQLite schema (Phase 1–4A tables) and apply additive migrations."""
+    """Create SQLite schema (Phase 1–4B tables) and apply additive migrations."""
     settings = get_settings()
     url = database_url or settings.database_url
     reset_engine()
@@ -467,4 +467,87 @@ def historical_snapshot(dataset_id: str, database_url: str | None) -> None:
             click.echo(json.dumps(payload, indent=2, default=str))
         finally:
             svc.close()
+
+
+@main.group("research-campaign")
+def research_campaign_grp() -> None:
+    """Phase 4B research campaign / strategy evaluation (historical only — no live).
+
+    Strict TRAIN/VAL/TEST, param selection on VAL only, OOS after lock,
+    WF / costs / robustness / MC. Never EDGE_CONFIRMED on thin samples.
+    """
+
+
+@research_campaign_grp.command("run")
+@click.option("--out", "out_dir", default="data/experiments/campaign", show_default=True)
+@click.option("--database-url", default=None, help="Override DATABASE_URL")
+@click.option("--dataset-id", default=None, help="Phase 4A catalog dataset_id (preferred)")
+@click.option("--symbol", "symbols", multiple=True, help="Symbol (repeatable; default BTC+ETH)")
+@click.option("--timeframe", default="1h", show_default=True)
+@click.option("--seed", default=7, show_default=True, type=int)
+@click.option("--max-bars", default=120, show_default=True, type=int, help="Small safe window")
+@click.option("--fixture", is_flag=True, default=False, help="Use synthetic fixtures (no network)")
+@click.option("--allow-download", is_flag=True, default=False, help="If catalog empty, download small public window")
+@click.option("--no-persist", is_flag=True, default=False, help="Skip SQLite experiment rows")
+@click.option("--cost-profile", default=None, help="BASE / CONSERVATIVE / STRESS")
+@click.option("--fixture-bars", default=120, show_default=True, type=int)
+def research_campaign_run(
+    out_dir: str,
+    database_url: str | None,
+    dataset_id: str | None,
+    symbols: tuple[str, ...],
+    timeframe: str,
+    seed: int,
+    max_bars: int,
+    fixture: bool,
+    allow_download: bool,
+    no_persist: bool,
+    cost_profile: str | None,
+    fixture_bars: int,
+) -> None:
+    """Run Phase 4B research campaign protocol (safe defaults / small range)."""
+    from crypto_lab.execution.safety import guard_live_trading
+    from crypto_lab.research.campaign import run_research_campaign
+
+    guard_live_trading()
+    summary = run_research_campaign(
+        out_dir=out_dir,
+        database_url=database_url,
+        dataset_id=dataset_id,
+        symbols=list(symbols) if symbols else None,
+        timeframe=timeframe,
+        seed=seed,
+        max_bars=max_bars,
+        persist=not no_persist,
+        use_fixture=fixture,
+        allow_download=allow_download,
+        cost_profile=cost_profile,
+        n_fixture=fixture_bars,
+    )
+    evidence = summary.get("evidence") or {}
+    click.echo(
+        json.dumps(
+            {
+                "phase": "4B",
+                "out": out_dir,
+                "EVIDENCE_STATUS": summary.get("EVIDENCE_STATUS"),
+                "scientific_conclusion": summary.get("scientific_conclusion"),
+                "EDGE_CONFIRMED": False,
+                "PROFITABLE": False,
+                "overfitting_risk": summary.get("overfitting_risk"),
+                "symbols": list(summary.get("symbols", {})),
+                "datasets": {
+                    s: (b.get("dataset_id") if isinstance(b, dict) else None)
+                    for s, b in (summary.get("symbols") or {}).items()
+                },
+                "cost_profile": summary.get("cost_profile"),
+                "git_commit": summary.get("git_commit"),
+                "why": evidence.get("why", [])[:5],
+                "MODE": summary.get("MODE"),
+                "LIVE_TRADING": summary.get("LIVE_TRADING"),
+            },
+            indent=2,
+            default=str,
+        )
+    )
 
