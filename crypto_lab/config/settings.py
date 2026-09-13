@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     http_max_retries: int = Field(default=4, description="HTTP retries on transient errors")
     rest_backoff_base_seconds: float = Field(default=0.5, description="Exponential backoff base")
 
+    # --- Phase 3 research hardening (configurable gates — not universal truth) ---
+    research_cost_profile: str = Field(
+        default="BASE",
+        description="COST_PROFILE_BASE / CONSERVATIVE / STRESS (alias BASE ok)",
+    )
+    research_min_bars: int = Field(default=200, description="Min bars before ADEQUATE_SAMPLE")
+    research_min_trades: int = Field(default=30, description="Min closed trades for sample adequacy")
+    research_min_period_bars: int = Field(default=50, description="Min bars spanning research period")
+    research_min_oos_bars: int = Field(default=40, description="Min OOS/test bars")
+    research_min_wf_windows: int = Field(default=3, description="Min walk-forward windows")
+
     @field_validator("mode", mode="before")
     @classmethod
     def normalize_mode(cls, v: object) -> str:
@@ -132,6 +143,24 @@ class Settings(BaseSettings):
         if v is None:
             return "binance"
         return str(v).strip().lower()
+
+    @field_validator("research_cost_profile", mode="before")
+    @classmethod
+    def normalize_cost_profile(cls, v: object) -> str:
+        if v is None:
+            return "BASE"
+        return str(v).strip().upper()
+
+    def sample_thresholds(self) -> "SampleThresholds":
+        from crypto_lab.backtest.evidence import SampleThresholds
+
+        return SampleThresholds(
+            min_bars=int(self.research_min_bars),
+            min_trades=int(self.research_min_trades),
+            min_period_bars=int(self.research_min_period_bars),
+            min_oos_bars=int(self.research_min_oos_bars),
+            min_wf_windows=int(self.research_min_wf_windows),
+        )
 
 
 @lru_cache

@@ -218,3 +218,32 @@ class StrategyVersion(Base):
     config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+
+class Experiment(Base):
+    """Phase 3 additive experiment registry (research metadata)."""
+
+    __tablename__ = "experiments"
+    __table_args__ = (UniqueConstraint("experiment_id", name="uq_experiments_eid"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    experiment_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    hypothesis: Mapped[str] = mapped_column(Text, nullable=False)
+    strategy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    strategy_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    parameters_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dataset_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dataset_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    timeframe: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    dates_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    split_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cost_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    results_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    benchmark_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    git_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    random_seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    extra_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

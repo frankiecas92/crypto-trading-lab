@@ -20,6 +20,7 @@ from crypto_lab.data.models import (
     StrategyVersion,
     SystemEvent,
     Trade,
+    Experiment,
 )
 
 T = TypeVar("T", bound=Base)
@@ -219,3 +220,9 @@ class SystemEventRepository(Repository[SystemEvent]):
 class StrategyVersionRepository(Repository[StrategyVersion]):
     def __init__(self, session: Session) -> None:
         super().__init__(session, StrategyVersion)
+
+
+
+class ExperimentRepository(Repository[Experiment]):
+    def __init__(self, session: Session) -> None:
+        super().__init__(session, Experiment)

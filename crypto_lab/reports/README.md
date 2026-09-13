@@ -1,5 +1,6 @@
-# Reports — stub
+# Reports — Phase 3
 
-Phase 1: placeholder for future reports / exports.
+Writers for equity curve, drawdown/underwater, trades, monthly returns
+under `data/experiments/` (gitignored runtime) or a caller-supplied directory.
 
-Not implemented yet.
+Code lives here; generated files do not belong in git.

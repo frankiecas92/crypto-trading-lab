@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crypto-trading-lab"
-version = "0.2.0"
-description = "Phase 2 — Data Engine (public market data) + Phase 1 infrastructure (no live trading)"
+version = "0.3.0"
+description = "Phase 3 — Strategy Research Lab (historical backtest) + Phase 2 Data Engine (no live trading)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

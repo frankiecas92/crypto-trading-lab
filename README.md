@@ -1,10 +1,11 @@
-# Crypto Trading Lab — Phase 2 (Data Engine)
+# Crypto Trading Lab — Phase 3 (Strategy Research Lab)
 
-**ES / EN** — Laboratorio de investigación con motor de datos de mercado públicos.  
-**Phase 2**: Data Engine (`RECEIVE → VALIDATE → NORMALIZE → STORE → MONITOR`) sobre la infraestructura Phase 1.  
-**No** trading real, **no** órdenes, **no** estrategias, **no** backtest, **no** paper broker, **no** API keys.
+**ES / EN** — Laboratorio de investigación: motor de datos públicos + backtest histórico.  
+**Phase 3**: Strategy Research Lab sobre Data Engine Phase 2 e infraestructura Phase 1.  
+**No** trading real, **no** órdenes reales, **no** bucle paper en vivo, **no** apalancamiento, **no** API keys.
 
-Detalles del motor de datos: [`docs/DATA_ENGINE.md`](docs/DATA_ENGINE.md).
+- Data Engine: [`docs/DATA_ENGINE.md`](docs/DATA_ENGINE.md)
+- Research lab: [`docs/STRATEGY_RESEARCH_LAB.md`](docs/STRATEGY_RESEARCH_LAB.md)
 
 ---
 
@@ -12,12 +13,11 @@ Detalles del motor de datos: [`docs/DATA_ENGINE.md`](docs/DATA_ENGINE.md).
 
 | Incluido ✅ | No incluido ❌ |
 |-------------|----------------|
-| Phase 1 infra (config, SQLite, safety, health, CLI) | Live trading / orders |
-| Binance Spot public data (primary) | Strategies / signals |
-| Coinbase Exchange public data (fallback) | Paper broker |
-| Validator + quality events | Backtesting |
-| WS + REST with reconnect / 429 backoff | Risk / money management |
-| Additive schema migration | Leverage / credentials |
+| Phase 1 infra + Phase 2 Data Engine | Live trading / real orders |
+| Historical backtest + costs + metrics | Paper broker live loop |
+| 4 benchmark controls (BH BTC/ETH, SMA, momentum) | Edge-hunting / auto-optimize |
+| IS/OOS, walk-forward, robustness, Monte Carlo | Leverage / money / agents |
+| Experiment registry (SQLite + JSON) | Trading API keys |
 
 ---
 
@@ -42,7 +42,7 @@ crypto-lab init-db
 crypto-lab health --json
 crypto-lab data fetch-rest --limit 5
 crypto-lab data validate-sample
-crypto-lab data health --ping --json
+crypto-lab experiment demo --bars 180 --seed 7
 ```
 
 ## Tests

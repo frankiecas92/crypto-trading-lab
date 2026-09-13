@@ -1,10 +1,7 @@
-# Risk — Phase 2+
+# Risk — Phase 3 (research sizing / stops)
 
-This package is a **stub** in Phase 1.
+- `FIXED_NOTIONAL` and `FIXED_RISK` (equity × risk/trade ÷ stop distance)
+- `max_position`, `max_exposure` (≤ 1, **no leverage**)
+- Optional stop-loss / take-profit / trailing stop as experimental params
 
-Future work (not implemented yet):
-- Position sizing
-- Max drawdown / exposure limits
-- Kill-switch policies
-
-Do not add risk engines here until Phase 2+.
+Not a live risk engine. Not a kill-switch. No money management for live trading.

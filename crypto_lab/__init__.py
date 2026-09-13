@@ -1,8 +1,9 @@
-"""Crypto Trading Lab — Phase 2 Data Engine (public market data only).
+"""Crypto Trading Lab — Phase 3 Strategy Research Lab.
 
-No live trading, no order execution, no strategies or paper broker.
-Data Engine: RECEIVE → VALIDATE → NORMALIZE → STORE → MONITOR.
+Public market data (Phase 2) + historical strategy research (Phase 3).
+No live trading, no real order execution, no paper-trading live loop.
+MODE=PAPER / LIVE_TRADING=False remain mandatory.
 """
 
-__version__ = "0.2.0"
-__phase__ = 2
+__version__ = "0.3.0"
+__phase__ = 3

@@ -1,4 +1,4 @@
-"""CLI entrypoint: init-db, health, version, data fetch/validate/health."""
+"""CLI entrypoint: init-db, health, version, data, experiment demo."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from crypto_lab.monitoring.health import run_health_checks
 @click.option("--log-level", default=None, help="Override LOG_LEVEL")
 @click.pass_context
 def main(ctx: click.Context, log_level: str | None) -> None:
-    """Crypto Trading Lab — Phase 2 Data Engine CLI (public market data only)."""
+    """Crypto Trading Lab — Phase 3 Strategy Research Lab (paper / no live trading)."""
     settings = get_settings()
     level = (log_level or settings.log_level).upper()
     setup_logging(level=level)
@@ -259,3 +259,51 @@ def data_validate_sample(database_url: str | None) -> None:
                 indent=2,
             )
         )
+
+
+
+@main.group("experiment")
+def experiment_grp() -> None:
+    """Phase 3 strategy research (historical simulation only — no live loop)."""
+
+
+@experiment_grp.command("demo")
+@click.option("--out", "out_dir", default="data/experiments/demo", show_default=True)
+@click.option("--database-url", default=None, help="Override DATABASE_URL for registry persist")
+@click.option("--bars", default=180, show_default=True, type=int)
+@click.option("--seed", default=7, show_default=True, type=int)
+@click.option("--cached", is_flag=True, default=False, help="Prefer cached OHLCV from Data Engine if present")
+@click.option("--no-persist", is_flag=True, default=False, help="Skip SQLite experiment rows")
+def experiment_demo(
+    out_dir: str,
+    database_url: str | None,
+    bars: int,
+    seed: int,
+    cached: bool,
+    no_persist: bool,
+) -> None:
+    """Run the 4 benchmark controls on synthetic (or cached) OHLCV; write IS/OOS/WF/robustness/MC."""
+    from crypto_lab.backtest.demo import run_demo
+    from crypto_lab.execution.safety import guard_live_trading
+
+    guard_live_trading()
+    summary = run_demo(
+        out_dir=out_dir,
+        database_url=database_url,
+        n=bars,
+        seed=seed,
+        prefer_cached=cached,
+        persist=not no_persist,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "out": out_dir,
+                "overfitting_risk": summary.get("overfitting_risk"),
+                "scientific_conclusion": summary.get("scientific_conclusion"),
+                "symbols": list(summary.get("symbols", {})),
+                "costs": summary.get("cost_assumptions"),
+            },
+            indent=2,
+        )
+    )

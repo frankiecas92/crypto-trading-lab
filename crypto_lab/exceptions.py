@@ -68,3 +68,23 @@ class ProviderError(DataError):
 
 class NotImplementedPhaseError(AppError):
     """Feature reserved for a later phase."""
+
+
+class ResearchError(AppError):
+    """Strategy research / backtest domain error."""
+
+
+class LookAheadError(ResearchError):
+    """Strategy, feature, or backtester attempted to read future data.
+
+    UNKNOWN AT T: any bar with event_time > decision time, including
+    future open/high/low/close/volume and any indicator that includes them.
+    """
+
+
+class SplitLeakageError(ResearchError):
+    """TEST/OOS data used during strategy-development APIs, or full-set normalize."""
+
+
+class FillLimitation(ResearchError):
+    """Insufficient information to fill an order — never invent a fill."""

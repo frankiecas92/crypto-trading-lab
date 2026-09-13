@@ -73,3 +73,7 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Phase 3 research runtime artifacts
+data/experiments/
+reports/_generated/

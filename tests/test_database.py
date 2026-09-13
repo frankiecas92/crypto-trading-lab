@@ -28,6 +28,7 @@ def test_expected_table_names():
     assert "market_trades" in EXPECTED_TABLES
     assert "market_quotes" in EXPECTED_TABLES
     assert "data_quality_events" in EXPECTED_TABLES
+    assert "experiments" in EXPECTED_TABLES
 
 
 def test_repository_crud_stub(tmp_path):

@@ -1,10 +1,14 @@
-# Strategies — Phase 2+
+# Strategies — Phase 3
 
-This package is a **stub** in Phase 1.
+Common ABC: `Strategy.generate_signals(data_view)`, `parameters()`, `version()`, `metadata()`.
 
-Future work (not implemented yet):
-- Signal generation
-- Strategy interfaces and registry
-- Parameter sets / versioning hooks
+Versions use `STRATEGY_v001` style and are stored in `strategy_versions` without overwrite.
 
-Do not add trading logic here until Phase 2+.
+Benchmark controls only:
+
+1. `BuyAndHoldBTC`
+2. `BuyAndHoldETH`
+3. `SMACrossover`
+4. `SimpleMomentum`
+
+Strategies must not access future bars. Use `DataView` only.

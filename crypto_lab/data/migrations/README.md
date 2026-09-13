@@ -25,3 +25,13 @@ See also `002_phase2_data_engine.sql` for a human-readable reference script.
 Idempotent: safe to re-run.
 
 **No destructive drops of Phase 1 business tables.**
+
+
+## Phase 3 (Strategy Research Lab) — additive
+Applied by `init_db()` → `apply_phase3_migrations()`:
+
+1. **New table** `experiments` (registry: hypothesis, strategy version, params,
+   dataset, splits, costs, results, benchmark, conclusion, git commit, seed)
+2. Reuses existing `strategy_versions` (no silent overwrite)
+
+See `003_phase3_research.sql`. Idempotent. No destructive drops.

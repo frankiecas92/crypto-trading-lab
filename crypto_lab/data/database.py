@@ -25,6 +25,8 @@ EXPECTED_TABLES = frozenset(
         "market_trades",
         "market_quotes",
         "data_quality_events",
+        # Phase 3
+        "experiments",
     }
 )
 
@@ -99,11 +101,12 @@ def reset_engine() -> None:
 
 
 def init_db(database_url: str | None = None) -> Engine:
-    """Create all tables (create_all) and apply additive Phase 2 migrations."""
+    """Create all tables (create_all) and apply additive Phase 2/3 migrations."""
     engine = get_engine(database_url)
     try:
         Base.metadata.create_all(bind=engine)
         apply_phase2_migrations(engine)
+        apply_phase3_migrations(engine)
     except Exception as exc:  # noqa: BLE001
         raise DatabaseError(f"Failed to initialize schema: {exc}") from exc
     return engine
@@ -116,7 +119,7 @@ def list_tables(engine: Engine | None = None) -> set[str]:
 
 
 def schema_complete(engine: Engine | None = None) -> bool:
-    """True if all expected Phase 1+2 tables exist."""
+    """True if all expected Phase 1+2+3 tables exist."""
     return EXPECTED_TABLES.issubset(list_tables(engine))
 
 
@@ -300,3 +303,14 @@ def _maybe_rebuild_market_data_unique(conn, insp) -> bool:
     )
     conn.execute(text("PRAGMA foreign_keys=ON"))
     return True
+
+
+
+def apply_phase3_migrations(engine: Engine) -> list[str]:
+    """Additive Phase 3 migrations. Idempotent. New tables via create_all."""
+    actions: list[str] = []
+    Base.metadata.create_all(bind=engine)
+    insp = inspect(engine)
+    if "experiments" in insp.get_table_names():
+        actions.append("ensure experiments")
+    return actions
