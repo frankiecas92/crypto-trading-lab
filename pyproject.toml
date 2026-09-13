@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crypto-trading-lab"
+version = "0.1.0"
+description = "Phase 1 — crypto research / paper-trading lab infrastructure (no live trading)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Francisco Castillo" }]
+dependencies = [
+  "pydantic>=2.0",
+  "pydantic-settings>=2.0",
+  "sqlalchemy>=2.0",
+  "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+crypto-lab = "crypto_lab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["crypto_lab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
