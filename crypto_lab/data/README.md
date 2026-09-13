@@ -1,10 +1,9 @@
-# Data — Phase 1
+# Data — Phase 2 Data Engine
 
-Schema + repository interfaces **only**.
+Pipeline: **RECEIVE → VALIDATE → NORMALIZE → STORE → MONITOR**
 
-- SQLAlchemy models for: `market_data`, `signals`, `trades`, `positions`, `portfolio`, `system_events`, `strategy_versions`
-- Thin CRUD repository stubs
-- **NO** live exchange clients
-- **NO** Binance API calls
+- Providers: `BinanceSpotProvider` (primary), `CoinbaseExchangeProvider` (fallback)
+- No API keys — public market data only
+- No trading decisions, orders, or account endpoints
 
-Prepared for a future Data Engine in later phases.
+See `docs/DATA_ENGINE.md` for full documentation.

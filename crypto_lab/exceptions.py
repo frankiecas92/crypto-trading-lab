@@ -30,6 +30,41 @@ class ValidationError(AppError):
     """Input / domain validation failure."""
 
 
+class DataError(AppError):
+    """Data engine / provider failure (network, parse, stale feed)."""
+
+
+class DataValidationError(ValidationError):
+    """Market data quality rule failure (reject record)."""
+
+    def __init__(
+        self,
+        message: str = "Data validation failed",
+        *,
+        rule: str | None = None,
+        details: dict | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.rule = rule
+        self.details = details or {}
+
+
+class RateLimitError(DataError):
+    """HTTP 429 / rate limit from public market data API."""
+
+    def __init__(
+        self,
+        message: str = "Rate limited",
+        *,
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class ProviderError(DataError):
+    """Upstream market-data provider failure."""
+
+
 class NotImplementedPhaseError(AppError):
     """Feature reserved for a later phase."""
-

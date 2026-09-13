@@ -1,7 +1,6 @@
-"""Data layer — schema and repository interfaces (no live exchange clients)."""
+"""Data layer: schema, repositories, and Phase 2 Data Engine."""
 
-from crypto_lab.data.database import get_engine, get_session_factory, init_db
-from crypto_lab.data.models import Base
+from crypto_lab.data.database import init_db, schema_complete
+from crypto_lab.data.pipeline import DataPipeline
 
-__all__ = ["Base", "get_engine", "get_session_factory", "init_db"]
-
+__all__ = ["init_db", "schema_complete", "DataPipeline"]

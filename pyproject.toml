@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crypto-trading-lab"
-version = "0.1.0"
-description = "Phase 1 — crypto research / paper-trading lab infrastructure (no live trading)"
+version = "0.2.0"
+description = "Phase 2 — Data Engine (public market data) + Phase 1 infrastructure (no live trading)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -15,6 +15,8 @@ dependencies = [
   "pydantic-settings>=2.0",
   "sqlalchemy>=2.0",
   "click>=8.1",
+  "httpx>=0.27",
+  "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
@@ -29,3 +31,7 @@ include = ["crypto_lab*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "integration: hits public network or heavier paths",
+  "live: live public REST (set RUN_LIVE_DATA_TESTS=1)",
+]

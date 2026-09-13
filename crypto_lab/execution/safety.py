@@ -11,7 +11,7 @@ class LiveTradingBlocked(SafetyError):
 
     def __init__(
         self,
-        message: str = "Live trading is blocked. Phase 1 enforces PAPER mode only.",
+        message: str = "Live trading is blocked. PAPER mode only — live trading blocked.",
     ) -> None:
         super().__init__(message)
 
@@ -28,7 +28,7 @@ def guard_live_trading(settings: Settings | None = None) -> None:
         )
     if cfg.mode.upper() != "PAPER":
         raise LiveTradingBlocked(
-            f"MODE={cfg.mode!r} is not allowed. Only PAPER mode is permitted in Phase 1."
+            f"MODE={cfg.mode!r} is not allowed. Only PAPER mode is permitted."
         )
 
 
