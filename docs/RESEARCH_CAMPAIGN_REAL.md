@@ -111,6 +111,10 @@ Fixtures are rejected if labeled as `REAL_HISTORICAL_EVIDENCE`.
 
 ---
 
+## Phase 4C audit note (incomplete last bar)
+
+Downloader originally stored the still-forming last 1h bar (`open=2026-09-13 07:00Z`, `received_at≈07:06–07:07Z`; close would be `08:00Z`). Pipeline now skips open candles. Impact: **1 / 17520** bars in TEST tail. Old checksums describe the series **including** that forming bar — do not rewrite `lab.db` and claim they still match. Conclusion `NO_EVIDENCE_OF_EDGE` is unlikely reversed; verdict `AUDIT_PASS_MINOR_CORRECTION`. Full detail: [`DATA_COST_AUDIT.md`](DATA_COST_AUDIT.md).
+
 ## Limitations
 
 - OHLCV next-bar-open execution (no microstructure / queue position).

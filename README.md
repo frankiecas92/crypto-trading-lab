@@ -9,6 +9,7 @@
 - Historical datasets: [`docs/HISTORICAL_DATA.md`](docs/HISTORICAL_DATA.md)
 - Research campaign: [`docs/RESEARCH_CAMPAIGN.md`](docs/RESEARCH_CAMPAIGN.md)
 - Real campaign report: [`docs/RESEARCH_CAMPAIGN_REAL.md`](docs/RESEARCH_CAMPAIGN_REAL.md)
+- Data & cost audit (4C): [`docs/DATA_COST_AUDIT.md`](docs/DATA_COST_AUDIT.md)
 
 ---
 

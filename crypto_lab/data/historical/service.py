@@ -110,6 +110,7 @@ class HistoricalDataService:
         max_bars: int | None = None,
         resume: bool = True,
         register: bool = True,
+        now: datetime | None = None,
     ) -> Dict[str, Any]:
         result = self.downloader.download(
             symbol,
@@ -118,6 +119,7 @@ class HistoricalDataService:
             end=end,
             max_bars=max_bars,
             resume=resume,
+            now=now,
         )
         inst = parse_instrument(result.source, result.source_symbol)
         stored = self.candles.list_candles_range(

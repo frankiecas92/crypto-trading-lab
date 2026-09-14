@@ -9,7 +9,7 @@ import pytest
 from crypto_lab.config.settings import Settings
 from crypto_lab.data.database import get_session_factory, init_db, reset_engine
 from crypto_lab.data.historical.constants import HARD_MAX_BARS
-from crypto_lab.data.historical.downloader import HistoricalDownloader
+from crypto_lab.data.historical.downloader import HistoricalDownloader, is_candle_closed
 from crypto_lab.data.historical.service import HistoricalDataService
 from crypto_lab.data.providers.base import DataProvider, ProviderHealth
 from crypto_lab.data.records import CanonicalCandle
@@ -168,3 +168,88 @@ def test_service_registers_dataset_no_edge_claim(session):
     assert payload["LIVE_TRADING"] is False
     st = svc.status(payload["dataset"]["dataset_id"])
     assert st["test_locked"] is True
+
+
+def test_is_candle_closed_helper_open_vs_closed():
+    now = datetime(2026, 9, 13, 7, 6, tzinfo=timezone.utc)
+    forming = datetime(2026, 9, 13, 7, 0, tzinfo=timezone.utc)
+    closed = datetime(2026, 9, 13, 6, 0, tzinfo=timezone.utc)
+    assert is_candle_closed(closed, "1h", now) is True
+    assert is_candle_closed(forming, "1h", now) is False
+    # Exactly at close instant: closed (period elapsed)
+    assert is_candle_closed(closed, "1h", datetime(2026, 9, 13, 7, 0, tzinfo=timezone.utc)) is True
+
+
+def test_skips_incomplete_open_candle(session):
+    """Candle whose open is in the current incomplete period is not stored."""
+    now = T0 + timedelta(hours=7, minutes=6)
+
+    class OpenTail(PagingProvider):
+        def fetch_klines(self, symbol, *, timeframe="1h", limit=50, start=None, end=None):
+            # 06:00 closed at 07:00; 07:00 still forming at 07:06
+            out = [_candle(6), _candle(7)]
+            if start is not None:
+                out = [c for c in out if c.event_time >= start]
+            if end is not None:
+                out = [c for c in out if c.event_time <= end]
+            return out
+
+    dl = HistoricalDownloader(session, settings=_settings(), provider=OpenTail(), source="binance")
+    result = dl.download(
+        "BTCUSDT",
+        timeframe="1h",
+        start=T0,
+        end=T0 + timedelta(hours=8),
+        max_bars=10,
+        resume=False,
+        now=now,
+    )
+    assert result.skipped_open == 1
+    assert result.stored == 1
+    assert any("open/incomplete" in n.lower() or "forming" in n.lower() for n in result.notes)
+    repo = MarketDataRepository(session)
+    rows = repo.list_candles_range(
+        source="binance",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        start=T0,
+        end=T0 + timedelta(hours=8),
+    )
+    times = {r.ts.replace(tzinfo=timezone.utc) if r.ts.tzinfo is None else r.ts.astimezone(timezone.utc) for r in rows}
+    assert (T0 + timedelta(hours=6)) in times
+    assert (T0 + timedelta(hours=7)) not in times
+
+
+def test_closed_candles_kept_when_period_elapsed(session):
+    now = T0 + timedelta(hours=8)  # 07:00 bar closed exactly at now
+
+    class TwoClosed(PagingProvider):
+        def fetch_klines(self, symbol, *, timeframe="1h", limit=50, start=None, end=None):
+            out = [_candle(6), _candle(7)]
+            if start is not None:
+                out = [c for c in out if c.event_time >= start]
+            if end is not None:
+                out = [c for c in out if c.event_time <= end]
+            return out
+
+    dl = HistoricalDownloader(session, settings=_settings(), provider=TwoClosed(), source="binance")
+    result = dl.download(
+        "BTCUSDT",
+        timeframe="1h",
+        start=T0,
+        end=T0 + timedelta(hours=8),
+        max_bars=10,
+        resume=False,
+        now=now,
+    )
+    assert result.skipped_open == 0
+    assert result.stored == 2
+    repo = MarketDataRepository(session)
+    rows = repo.list_candles_range(
+        source="binance",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        start=T0,
+        end=T0 + timedelta(hours=8),
+    )
+    assert len(rows) == 2

@@ -76,6 +76,8 @@ Critical (never `VALID`): invalid OHLC, future timestamps, negative / impossible
 
 Gaps are **recorded** (`gap_start`, `gap_end`, expected/actual records, duration, severity). They are **not** interpolated as real market data.
 
+Open / incomplete candles are **excluded** at download: `event_time + timeframe_delta > now_utc` (forming bar is not stored). See Phase 4C [`DATA_COST_AUDIT.md`](DATA_COST_AUDIT.md).
+
 `event_time` (exchange) ≠ `received_at` (local receive). Historical backfill is expected to have `event_time` ≪ `received_at`; that lag is not a critical error.
 
 ---
@@ -114,5 +116,6 @@ Different content → different id. Current `data_version`: `4A.1`.
 - Small default windows — not a bulk archive job
 - Coinbase has no native 4h; use 1m + causal resample
 - Resume skips stored timestamps; it does not invent missing bars
+- Forming/incomplete last bars are skipped (`is_candle_closed`); they are not rewritten in already-stored 4B-REAL DB
 - Optional live tests: `RUN_LIVE_DATA_TESTS=1 pytest -m live`
 - Phase 5 / Decision Engine / paper live loop are out of scope

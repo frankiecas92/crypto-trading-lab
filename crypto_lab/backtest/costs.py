@@ -1,9 +1,15 @@
 """Configurable cost model: fees, spread, slippage, latency; optional partial fills.
 
-Cost profiles (configurable, not hardcoded universal fees):
+Cost profiles (configurable research assumptions — NOT official Binance fee lookups):
   COST_PROFILE_CONSERVATIVE / BASE / STRESS
   BASE may equal current demo: fee 10bps, spread 4bps, slip 2bps
   maker_fee_bps vs taker_fee_bps exist (may default equal; do not assume forever).
+
+Exchange fees vs market friction (keep separate):
+  fee_bps / maker_fee_bps / taker_fee_bps = EXCHANGE FEES
+  spread_bps + slippage_bps = MARKET FRICTION
+  MARKET fills use taker; LIMIT fills use maker.
+  Fee is applied per fill (entry AND exit). Spread is half on buy + half on sell.
 
 Gross vs net:
   mid/open is the frictionless reference (gross).

@@ -66,6 +66,22 @@ def _tf_delta(timeframe: str) -> timedelta:
     return timedelta(milliseconds=TIMEFRAME_MS[key])
 
 
+def is_candle_closed(
+    event_time: datetime,
+    timeframe: str,
+    now: datetime | None = None,
+) -> bool:
+    """True iff the candle that opened at ``event_time`` is fully closed by ``now``.
+
+    A forming/incomplete bar has ``event_time + timeframe_delta > now_utc`` and
+    must not be stored as historical OHLCV. Equality at the close instant counts
+    as closed (the period has elapsed).
+    """
+    et = _aware(event_time)
+    n = _aware(now or datetime.now(timezone.utc))
+    return et + _tf_delta(timeframe) <= n
+
+
 def default_window(
     *,
     timeframe: str = DEFAULT_TIMEFRAME,
@@ -112,6 +128,7 @@ class DownloadResult:
     fetched: int = 0
     stored: int = 0
     skipped_existing: int = 0
+    skipped_open: int = 0
     rejected: int = 0
     pages: int = 0
     truncated: bool = False
@@ -128,6 +145,7 @@ class DownloadResult:
             "fetched": self.fetched,
             "stored": self.stored,
             "skipped_existing": self.skipped_existing,
+            "skipped_open": self.skipped_open,
             "rejected": self.rejected,
             "pages": self.pages,
             "truncated": self.truncated,
@@ -164,10 +182,12 @@ class HistoricalDownloader:
         end: datetime | None = None,
         max_bars: int | None = None,
         resume: bool = True,
+        now: datetime | None = None,
     ) -> DownloadResult:
         """Paginated public REST download with resume and duplicate skip.
 
         Refuses oversized requests. Default window is a few days of 1h.
+        Open/incomplete candles (event_time + timeframe > now_utc) are skipped.
         """
         tf = timeframe.strip().lower()
         if tf not in SUPPORTED_TIMEFRAMES:
@@ -227,10 +247,15 @@ class HistoricalDownloader:
             skipped_existing=len(existing_ts),
             truncated=truncated,
         )
+        now_utc = _aware(now or datetime.now(timezone.utc))
         if truncated:
             result.notes.append(f"range truncated to max_bars={cap}")
         result.notes.append(
             "Public market data only. Not EDGE_CONFIRMED / PROFITABLE / trading evidence."
+        )
+        result.notes.append(
+            "Open/incomplete candles excluded: event_time + timeframe_delta > now_utc "
+            "(forming bar is not stored as historical OHLCV)."
         )
 
         if resume and len(existing_ts) >= cap:
@@ -282,6 +307,9 @@ class HistoricalDownloader:
                         f"skipped mismatched candle source={c.source} symbol={c.symbol}"
                     )
                     continue
+                if not is_candle_closed(et, tf, now=now_utc):
+                    result.skipped_open += 1
+                    continue
                 if et in seen:
                     result.skipped_existing += 1
                     continue
@@ -300,6 +328,12 @@ class HistoricalDownloader:
                 break
             if result.pages > 0:
                 time.sleep(PAGE_SLEEP_SECONDS)
+
+        if result.skipped_open:
+            result.notes.append(
+                f"Skipped {result.skipped_open} open/incomplete candle(s): "
+                "event_time + timeframe > now_utc (forming bar not stored)."
+            )
 
         if collected:
             pipe = DataPipeline(self.session, provider=self.provider, settings=self.settings)

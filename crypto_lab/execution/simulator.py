@@ -95,7 +95,9 @@ class ExecutionSimulator:
 
         intended = qty
         qty, partial = apply_partial(qty, self.cost)
-        q = compute_fill_quote(order.side, bar, self.cost, qty=qty, use_open=use_open)
+        q = compute_fill_quote(
+            order.side, bar, self.cost, qty=qty, use_open=use_open, liquidity="maker"
+        )
         # Honor limit: buy cannot pay more than limit; sell cannot receive less.
         if order.side == "BUY":
             # Gap through: open below limit → fill at open (better); else limit.
@@ -107,8 +109,9 @@ class ExecutionSimulator:
             if bar.open > limit:
                 fill_price = max(bar.open, limit)
 
-        # Recompute fee from the actual fill price; keep spread/slip from model.
-        fee = fill_price * qty * self.cost.fee_rate()
+        # Recompute fee from the actual fill price; LIMIT fills use maker fee.
+        # (MARKET path uses taker via compute_fill_quote default.)
+        fee = fill_price * qty * self.cost.fee_rate(liquidity="maker")
         return (
             Fill(
                 index=-1,
